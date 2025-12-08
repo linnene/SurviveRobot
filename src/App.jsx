@@ -10,10 +10,10 @@ function App() {
   const [activeTab, setActiveTab] = useState('game') // 'game' 或 'test'
   
   const { unityProvider, sendMessage, isLoaded } = useUnityContext({
-    loaderUrl: '/Build/Build.loader.js',
-    dataUrl: '/Build/Build.data',
-    frameworkUrl: '/Build/Build.framework.js',
-    codeUrl: '/Build/Build.wasm',
+    loaderUrl: '/Build/build.loader.js',
+    dataUrl: '/Build/build.data',
+    frameworkUrl: '/Build/build.framework.js',
+    codeUrl: '/Build/build.wasm',
   })
 
   // Socket 连接
