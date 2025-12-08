@@ -16,7 +16,7 @@ function App() {
     codeUrl: '/Build/build.wasm',
   })
 
-  // Socket 连接
+  // 统一客户端连接 (自动检测JSBridge或Socket)
   const { isConnected: isSocketConnected, connectionState } = useSocket('ws://localhost:50001')
   const playerStatus = usePlayerStatus()
   const { placeItem, lastError, clearError } = useAction()
@@ -46,19 +46,28 @@ function App() {
 
   const keysPressed = useRef({})
 
-  // 同步 Socket 数据到 robotState
+  // 同步统一客户端数据到 robotState
   useEffect(() => {
     if (playerStatus) {
+      console.log('[App] 更新robotState，playerStatus:', playerStatus)
       setRobotState((prev) => ({
         ...prev,
-        waterCount: playerStatus.inventory.items.water || 0,
-        foodCount: playerStatus.inventory.items.food || 0,
-        position: playerStatus.position,
-        distanceToNpc: playerStatus.distanceToNpc,
-        npcId: playerStatus.npcId,
-        playerId: playerStatus.playerId,
-        // 根据距离判断是否检测到幸存者
-        isPersonDetected: playerStatus.distanceToNpc < 15,
+        waterCount: playerStatus.inventory?.items?.water || 0,
+        foodCount: playerStatus.inventory?.items?.food || 0,
+        position: playerStatus.position || prev.position,
+        distanceToNpc: playerStatus.distanceToNpc || 0,
+        npcId: playerStatus.npcId || prev.npcId,
+        playerId: playerStatus.playerId || prev.playerId,
+        // 从Unity数据同步手电筒和夜视状态
+        isFlashlightOn: playerStatus.flashlightOn || false,
+        isNightvisionOn: playerStatus.nightVisionOn || false,
+        // 根据距离和Unity数据判断是否检测到幸存者
+        isPersonDetected: (playerStatus.distanceToNpc > 0 && playerStatus.distanceToNpc < 15) || playerStatus.npcIsFollowing,
+        // 添加任务相关状态
+        missionCompleted: playerStatus.missionCompleted || false,
+        npcFollowUnlocked: playerStatus.npcFollowUnlocked || false,
+        npcIsFollowing: playerStatus.npcIsFollowing || false,
+        playerTraveledDistance: playerStatus.playerTraveledDistance || 0,
       }))
     }
   }, [playerStatus])
@@ -342,6 +351,17 @@ function App() {
               unityProvider={unityProvider} 
               style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}
             />
+          </div>
+
+          {/* 调试信息面板 */}
+          <div className="absolute top-20 right-4 z-[9998] bg-black/70 text-white p-2 rounded text-xs max-w-xs">
+            <div>连接: {isSocketConnected ? '✓' : '✗'}</div>
+            <div>距离NPC: {robotState.distanceToNpc?.toFixed(1)}m</div>
+            <div>检测到生命: {robotState.isPersonDetected ? '✓' : '✗'}</div>
+            <div>手电筒: {robotState.isFlashlightOn ? '开' : '关'}</div>
+            <div>夜视: {robotState.isNightvisionOn ? '开' : '关'}</div>
+            <div>水: {robotState.waterCount} 食物: {robotState.foodCount}</div>
+            <div>任务完成: {robotState.missionCompleted ? '✓' : '✗'}</div>
           </div>
 
           {/* HUD 覆盖层 */}
