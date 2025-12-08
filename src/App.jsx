@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { Unity, useUnityContext } from 'react-unity-webgl'
 import RobotHUD from './components/RobotHUD'
+import JSBridgeTest from './components/JSBridgeTest'
 import { useSocket, usePlayerStatus, useAction } from './hooks/useSocket'
 import { ITEM_TYPES } from './services/messageTypes'
 import './App.css'
 
 function App() {
+  const [activeTab, setActiveTab] = useState('game') // 'game' 或 'test'
+  
   const { unityProvider, sendMessage, isLoaded } = useUnityContext({
     loaderUrl: '/Build/build.loader.js',
     dataUrl: '/Build/build.data',
@@ -296,24 +299,57 @@ function App() {
 
   return (
     <div className="w-screen h-screen bg-dark-bg text-white relative overflow-hidden">
-      {/* Unity Canvas - 全屏底层 */}
-      <div className="absolute inset-0 w-full h-full">
-        <Unity 
-          unityProvider={unityProvider} 
-          style={{ width: '100%', height: '100%' }}
-        />
+      {/* Tab 切换按钮 */}
+      <div className="absolute top-4 right-4 z-50 flex space-x-2">
+        <button
+          onClick={() => setActiveTab('game')}
+          className={`px-4 py-2 rounded text-sm transition-colors ${
+            activeTab === 'game' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          游戏界面
+        </button>
+        <button
+          onClick={() => setActiveTab('test')}
+          className={`px-4 py-2 rounded text-sm transition-colors ${
+            activeTab === 'test' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          通信测试
+        </button>
       </div>
 
-      {/* HUD 覆盖层 */}
-      <RobotHUD
-        robotState={robotState}
-        isMoving={isMoving}
-        onButtonPress={handleButtonPress}
-        onButtonRelease={handleButtonRelease}
-        isLoaded={isLoaded}
-        isSocketConnected={isSocketConnected}
-        keysPressed={keysPressed.current}
-      />
+      {activeTab === 'game' ? (
+        <>
+          {/* Unity Canvas - 全屏底层 */}
+          <div className="absolute inset-0 w-full h-full">
+            <Unity 
+              unityProvider={unityProvider} 
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+
+          {/* HUD 覆盖层 */}
+          <RobotHUD
+            robotState={robotState}
+            isMoving={isMoving}
+            onButtonPress={handleButtonPress}
+            onButtonRelease={handleButtonRelease}
+            isLoaded={isLoaded}
+            isSocketConnected={isSocketConnected}
+            keysPressed={keysPressed.current}
+          />
+        </>
+      ) : (
+        /* JSBridge 测试界面 */
+        <div className="absolute inset-0 w-full h-full bg-gray-900 overflow-auto">
+          <JSBridgeTest />
+        </div>
+      )}
     </div>
   )
 }

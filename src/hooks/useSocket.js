@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { socketClient } from '../services/socketClient'
+import { unifiedClient as socketClient } from '../services/unifiedClient'
 import { parsePlayerStatus, formatError } from '../services/messageTypes'
 
 /**
@@ -31,7 +31,10 @@ export function useSocket(url = 'ws://localhost:50001') {
     socketClient.on('error', handleError)
 
     // 初始连接
-    socketClient.connect(url)
+    socketClient.connect(url).catch(err => {
+      console.error('[useSocket] 连接失败:', err)
+      setLastError(err)
+    })
 
     // 更新连接状态
     const stateInterval = setInterval(() => {

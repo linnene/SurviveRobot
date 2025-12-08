@@ -1,5 +1,5 @@
 /**
- * Socket 消息类型定义
+ * Unity WebGL JavaScript Bridge 消息类型定义
  */
 
 // 主题类型
@@ -9,6 +9,7 @@ export const TOPICS = {
   ACTION_RESULT: 'action_result',
   ERROR: 'error',
   HEARTBEAT: 'heartbeat',
+  RESET_MISSION: 'reset_mission',
 }
 
 // 操作类型
@@ -93,23 +94,49 @@ export function createPlaceItemMessage(itemType, count = 1) {
 }
 
 /**
- * 解析玩家状态
+ * 创建重置任务消息（jslib专用）
+ */
+export function createResetMissionMessage() {
+  return {
+    topic: TOPICS.RESET_MISSION,
+    body: {}
+  }
+}
+
+/**
+ * 解析玩家状态（Unity WebGL Bridge格式）
  */
 export function parsePlayerStatus(data) {
   return {
     timestamp: data.timestamp,
-    playerId: data.playerId,
-    npcId: data.npcId,
-    distanceToNpc: data.distanceToNpc,
+    playerId: data.playerId || 'player',
+    npcId: data.npcId || 'npc',
+    distanceToNpc: data.distanceToNpc || -1,
     inventory: {
-      capacity: data.inventory.capacity,
-      used: data.inventory.used,
-      items: data.inventory.items.reduce((acc, item) => {
+      capacity: data.inventory?.capacity || 0,
+      used: data.inventory?.used || 0,
+      items: data.inventory?.items ? data.inventory.items.reduce((acc, item) => {
         acc[item.type] = item.count
         return acc
-      }, {}),
+      }, {}) : {
+        water: data.inventory?.items?.find(item => item.type === 'water')?.count || 0,
+        food: data.inventory?.items?.find(item => item.type === 'food')?.count || 0,
+      },
     },
     position: data.position || { x: 0, y: 0, z: 0 },
+    npcPosition: data.npcPosition || { x: 0, y: 0, z: 0 },
+    flashlightOn: data.flashlightOn || false,
+    nightVisionOn: data.nightVisionOn || false,
+    npcHasReceivedWater: data.npcHasReceivedWater || false,
+    npcHasReceivedFood: data.npcHasReceivedFood || false,
+    npcFollowUnlocked: data.npcFollowUnlocked || false,
+    npcIsFollowing: data.npcIsFollowing || false,
+    npcFollowTriggerDistance: data.npcFollowTriggerDistance || 0,
+    npcStopDistance: data.npcStopDistance || 0,
+    missionTargetPosition: data.missionTargetPosition || { x: 0, y: 0, z: 0 },
+    npcDistanceToTarget: data.npcDistanceToTarget || -1,
+    playerTraveledDistance: data.playerTraveledDistance || 0,
+    missionCompleted: data.missionCompleted || false,
     cameraYaw: data.cameraYaw || 0,
     cameraPitch: data.cameraPitch || 0,
   }
