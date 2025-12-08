@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Unity, useUnityContext } from 'react-unity-webgl'
 import RobotHUD from './components/RobotHUD'
 import JSBridgeTest from './components/JSBridgeTest'
-import { useSocket, usePlayerStatus, useAction } from './hooks/useSocket'
-import { ITEM_TYPES } from './services/messageTypes'
+import { jsBridgeClient } from './services/jsBridgeClient'
+import { parsePlayerStatus } from './services/messageTypes'
 import './App.css'
 
 function App() {
@@ -16,11 +16,9 @@ function App() {
     codeUrl: '/Build/build.wasm',
   })
 
-  // 统一客户端连接 (自动检测JSBridge或Socket)
-  const { isConnected: isSocketConnected, connectionState } = useSocket('ws://localhost:50001')
-  const playerStatus = usePlayerStatus()
-  const { placeItem, lastError, clearError } = useAction()
-
+  // JSBridge连接状态
+  const [isConnected, setIsConnected] = useState(false)
+  
   const [robotState, setRobotState] = useState({
     battery: 85,
     waterCount: 10,
@@ -46,39 +44,78 @@ function App() {
 
   const keysPressed = useRef({})
 
-  // 同步统一客户端数据到 robotState
+  // 初始化JSBridge并监听Unity数据
   useEffect(() => {
-    if (playerStatus) {
-      console.log('[App] 更新robotState，playerStatus:', playerStatus)
+    // 连接状态监听
+    const handleConnected = () => {
+      console.log('[App] JSBridge连接成功')
+      setIsConnected(true)
+    }
+
+    const handleDisconnected = () => {
+      console.log('[App] JSBridge断开连接')
+      setIsConnected(false)
+    }
+
+    // 监听玩家状态更新
+    const handlePlayerStatus = (data) => {
+      console.log('[App] 收到Unity数据:', data)
+      
+      // 解析Unity数据
+      const parsed = parsePlayerStatus(data)
+      
+      // 实时更新robotState
       setRobotState((prev) => ({
         ...prev,
-        waterCount: playerStatus.inventory?.items?.water || 0,
-        foodCount: playerStatus.inventory?.items?.food || 0,
-        position: playerStatus.position || prev.position,
-        distanceToNpc: playerStatus.distanceToNpc || 0,
-        npcId: playerStatus.npcId || prev.npcId,
-        playerId: playerStatus.playerId || prev.playerId,
-        // 从Unity数据同步手电筒和夜视状态
-        isFlashlightOn: playerStatus.flashlightOn || false,
-        isNightvisionOn: playerStatus.nightVisionOn || false,
-        // 根据距离和Unity数据判断是否检测到幸存者
-        isPersonDetected: (playerStatus.distanceToNpc > 0 && playerStatus.distanceToNpc < 15) || playerStatus.npcIsFollowing,
-        // 添加任务相关状态
-        missionCompleted: playerStatus.missionCompleted || false,
-        npcFollowUnlocked: playerStatus.npcFollowUnlocked || false,
-        npcIsFollowing: playerStatus.npcIsFollowing || false,
-        playerTraveledDistance: playerStatus.playerTraveledDistance || 0,
+        // 库存
+        waterCount: parsed.inventory?.items?.water || 0,
+        foodCount: parsed.inventory?.items?.food || 0,
+        // 位置
+        position: parsed.position,
+        // NPC距离
+        distanceToNpc: parsed.distanceToNpc,
+        // 手电筒和夜视
+        isFlashlightOn: parsed.flashlightOn,
+        isNightvisionOn: parsed.nightVisionOn,
+        // 生命体征检测（距离<15m 或 NPC正在跟随）
+        isPersonDetected: (parsed.distanceToNpc > 0 && parsed.distanceToNpc < 15) || parsed.npcIsFollowing,
+        // 任务状态
+        missionCompleted: parsed.missionCompleted,
+        npcFollowUnlocked: parsed.npcFollowUnlocked,
+        npcIsFollowing: parsed.npcIsFollowing,
+        npcHasReceivedWater: parsed.npcHasReceivedWater,
+        npcHasReceivedFood: parsed.npcHasReceivedFood,
+        playerTraveledDistance: parsed.playerTraveledDistance,
       }))
     }
-  }, [playerStatus])
 
-  // 显示错误提示
-  useEffect(() => {
-    if (lastError) {
-      alert(`错误: ${lastError.message}\n详情: ${lastError.details || '无'}`)
-      clearError()
+    // 监听操作结果
+    const handleActionResult = (data) => {
+      console.log('[App] 操作结果:', data)
+      if (data.status === 'error') {
+        alert(`操作失败: ${data.errorMessage || '未知错误'}`)
+      }
     }
-  }, [lastError, clearError])
+
+    // 注册事件监听器
+    jsBridgeClient.on('connected', handleConnected)
+    jsBridgeClient.on('disconnected', handleDisconnected)
+    jsBridgeClient.on('player_status', handlePlayerStatus)
+    jsBridgeClient.on('action_result', handleActionResult)
+
+    // 检查初始连接状态
+    if (jsBridgeClient.isConnected()) {
+      setIsConnected(true)
+    }
+
+    // 清理
+    return () => {
+      jsBridgeClient.off('connected', handleConnected)
+      jsBridgeClient.off('disconnected', handleDisconnected)
+      jsBridgeClient.off('player_status', handlePlayerStatus)
+      jsBridgeClient.off('action_result', handleActionResult)
+    }
+  }, [])
 
   // 初始化键盘监听
   useEffect(() => {
@@ -105,39 +142,21 @@ function App() {
             sendMessage('Robot', 'Move', 'right')
             break
           case '1':
-            // 通过 Socket 发送放置指令
-            if (isSocketConnected && robotState.waterCount > 0) {
-              placeItem(ITEM_TYPES.WATER, 1)
-            }
-            // 同时通知 Unity（如果需要）
-            if (isLoaded) {
-              sendMessage('Robot', 'DropItem', 'water')
+            // 通过 JSBridge 发送放置水的指令
+            if (isConnected && robotState.waterCount > 0) {
+              jsBridgeClient.placeItem('water', 1)
+              console.log('[App] 发送放置水指令')
             }
             break
           case '2':
-            // 通过 Socket 发送放置指令
-            if (isSocketConnected && robotState.foodCount > 0) {
-              placeItem(ITEM_TYPES.FOOD, 1)
-            }
-            // 同时通知 Unity（如果需要）
-            if (isLoaded) {
-              sendMessage('Robot', 'DropItem', 'food')
+            // 通过 JSBridge 发送放置食物的指令
+            if (isConnected && robotState.foodCount > 0) {
+              jsBridgeClient.placeItem('food', 1)
+              console.log('[App] 发送放置食物指令')
             }
             break
-          case 'F':
-            sendMessage('Robot', 'ToggleTool', 'flashlight')
-            setRobotState(prev => ({
-              ...prev,
-              isFlashlightOn: !prev.isFlashlightOn,
-            }))
-            break
-          case 'N':
-            sendMessage('Robot', 'ToggleTool', 'nightvision')
-            setRobotState(prev => ({
-              ...prev,
-              isNightvisionOn: !prev.isNightvisionOn,
-            }))
-            break
+          // Unity自动处理手电筒和夜视切换，状态通过JSBridge同步
+          // 不需要手动切换状态
           default:
             break
         }
@@ -245,42 +264,21 @@ function App() {
         setIsMoving(prev => ({ ...prev, right: true }))
         break
       case 'water':
-        if (robotState.waterCount > 0) {
-          // 通过 Socket 发送
-          if (isSocketConnected) {
-            placeItem(ITEM_TYPES.WATER, 1)
-          }
-          // 通知 Unity
-          if (isLoaded) {
-            sendMessage('Robot', 'DropItem', 'water')
-          }
+        if (robotState.waterCount > 0 && isConnected) {
+          jsBridgeClient.placeItem('water', 1)
+          console.log('[App] 按钮: 放置水')
         }
         break
       case 'food':
-        if (robotState.foodCount > 0) {
-          // 通过 Socket 发送
-          if (isSocketConnected) {
-            placeItem(ITEM_TYPES.FOOD, 1)
-          }
-          // 通知 Unity
-          if (isLoaded) {
-            sendMessage('Robot', 'DropItem', 'food')
-          }
+        if (robotState.foodCount > 0 && isConnected) {
+          jsBridgeClient.placeItem('food', 1)
+          console.log('[App] 按钮: 放置食物')
         }
         break
+      // Unity自动处理手电筒和夜视，状态通过JSBridge实时同步
       case 'flashlight':
-        sendMessage('Robot', 'ToggleTool', 'flashlight')
-        setRobotState(prev => ({
-          ...prev,
-          isFlashlightOn: !prev.isFlashlightOn,
-        }))
-        break
       case 'nightvision':
-        sendMessage('Robot', 'ToggleTool', 'nightvision')
-        setRobotState(prev => ({
-          ...prev,
-          isNightvisionOn: !prev.isNightvisionOn,
-        }))
+        // 这些状态由Unity管理，不需要前端手动切换
         break
       default:
         break
@@ -353,17 +351,6 @@ function App() {
             />
           </div>
 
-          {/* 调试信息面板 */}
-          <div className="absolute top-20 right-4 z-[9998] bg-black/70 text-white p-2 rounded text-xs max-w-xs">
-            <div>连接: {isSocketConnected ? '✓' : '✗'}</div>
-            <div>距离NPC: {robotState.distanceToNpc?.toFixed(1)}m</div>
-            <div>检测到生命: {robotState.isPersonDetected ? '✓' : '✗'}</div>
-            <div>手电筒: {robotState.isFlashlightOn ? '开' : '关'}</div>
-            <div>夜视: {robotState.isNightvisionOn ? '开' : '关'}</div>
-            <div>水: {robotState.waterCount} 食物: {robotState.foodCount}</div>
-            <div>任务完成: {robotState.missionCompleted ? '✓' : '✗'}</div>
-          </div>
-
           {/* HUD 覆盖层 */}
           <RobotHUD
             robotState={robotState}
@@ -371,7 +358,7 @@ function App() {
             onButtonPress={handleButtonPress}
             onButtonRelease={handleButtonRelease}
             isLoaded={isLoaded}
-            isSocketConnected={isSocketConnected}
+            isSocketConnected={isConnected}
             keysPressed={keysPressed.current}
           />
         </>
