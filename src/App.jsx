@@ -6,6 +6,7 @@ import RobotHUD_Dashboard from './components/RobotHUD_Dashboard'
 import JSBridgeTest from './components/JSBridgeTest'
 import { jsBridgeClient } from './services/jsBridgeClient'
 import { parsePlayerStatus } from './services/messageTypes'
+import usePicoController from './hooks/usePicoController'
 import './App.css'
 
 function App() {
@@ -324,6 +325,14 @@ function App() {
         break
     }
   }
+
+  // PICO VR 手柄适配
+  usePicoController({
+    handleButtonPress,
+    handleButtonRelease,
+    isLoaded,
+    isConnected
+  })
 
   return (
     <div className="w-screen h-screen bg-dark-bg text-white relative overflow-hidden">
