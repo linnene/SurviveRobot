@@ -10,32 +10,47 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  Thermometer,
+  Wind,
+  Droplet
 } from 'lucide-react'
 
-const MinimalButton = ({ onClick, disabled, active, label, icon: Icon }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`
-      flex items-center justify-center gap-2 px-4 py-3 rounded border transition-colors
-      ${disabled 
-        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-        : active
-          ? 'bg-black text-white border-black'
-          : 'bg-white text-black border-gray-300 hover:bg-gray-50'
-      }
-    `}
-  >
-    {Icon && <Icon size={18} />}
-    <span className="font-medium text-sm">{label}</span>
-  </button>
-)
+const MinimalButton = ({ onClick, disabled, active, label, icon: Icon, color = 'gray', shortcut }) => {
+  const activeClass = color === 'red' ? 'bg-red-900/80 text-white border-red-500' : 'bg-gray-200 text-black border-white'
+  const baseClass = 'bg-gray-800/80 text-gray-300 border-gray-600 hover:bg-gray-700'
+  
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        relative flex items-center justify-center gap-2 px-4 py-3 rounded border transition-all font-bold min-w-[140px]
+        ${disabled 
+          ? 'bg-gray-900/50 text-gray-600 border-gray-800 cursor-not-allowed' 
+          : active
+            ? activeClass
+            : baseClass
+        }
+      `}
+    >
+      {Icon && <Icon size={20} />}
+      <span className="text-sm">{label}</span>
+      {shortcut && (
+        <span className="absolute top-1 right-1 text-[10px] font-mono opacity-50 border border-current px-1 rounded">
+          {shortcut}
+        </span>
+      )}
+    </button>
+  )
+}
 
-const InfoCard = ({ title, children }) => (
-  <div className="bg-white/90 p-4 rounded-lg border border-gray-200 shadow-sm backdrop-blur-sm">
-    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{title}</h3>
-    {children}
+const DataItem = ({ label, value, unit, alert }) => (
+  <div className={`flex flex-col ${alert ? 'text-red-500 animate-pulse' : 'text-gray-300'}`}>
+    <span className="text-[10px] font-bold uppercase text-gray-500">{label}</span>
+    <span className="text-xl font-mono font-bold leading-none">
+      {value}<span className="text-xs ml-0.5 font-normal text-gray-500">{unit}</span>
+    </span>
   </div>
 )
 
@@ -51,137 +66,193 @@ const RobotHUD_Minimal = ({
   // 格式化距离显示
   const formatDistance = (dist) => {
     if (dist <= 0) return '--'
-    return `${dist.toFixed(1)}m`
+    return dist.toFixed(1)
   }
 
   return (
-    <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between text-gray-800 font-sans">
-      {/* 顶部栏：状态概览 */}
+    <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between font-sans bg-black/20">
+      {/* 顶部栏：关键状态 */}
       <div className="flex justify-between items-start pointer-events-auto">
-        <div className="flex gap-4">
-          <InfoCard title="系统状态">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                {isSocketConnected ? <Wifi size={16} className="text-green-600" /> : <WifiOff size={16} className="text-red-500" />}
-                <span className="text-sm font-medium">{isSocketConnected ? '在线' : '离线'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Battery size={16} className={robotState.battery < 20 ? 'text-red-500' : 'text-black'} />
-                <span className="text-sm font-medium">{robotState.battery}%</span>
-              </div>
+        {/* 左上：系统状态 */}
+        <div className="bg-gray-900/90 border border-gray-700 p-4 rounded-lg shadow-lg flex gap-6 backdrop-blur-sm">
+          <div className="flex items-center gap-3 border-r border-gray-700 pr-6">
+            {isSocketConnected ? <Wifi size={24} className="text-emerald-500" /> : <WifiOff size={24} className="text-red-500" />}
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-gray-500 uppercase">LINK STATUS</span>
+              <span className={`text-sm font-bold ${isSocketConnected ? 'text-emerald-500' : 'text-red-500'}`}>
+                {isSocketConnected ? 'ONLINE' : 'OFFLINE'}
+              </span>
             </div>
-          </InfoCard>
-
-          <InfoCard title="位置信息">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 text-sm">
-                <MapPin size={14} />
-                <span>X: {robotState.position.x.toFixed(1)}</span>
-                <span>Z: {robotState.position.z.toFixed(1)}</span>
-              </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Battery size={24} className={robotState.battery < 20 ? 'text-red-500' : 'text-gray-300'} />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-gray-500 uppercase">BATTERY</span>
+              <span className={`text-sm font-bold ${robotState.battery < 20 ? 'text-red-500' : 'text-gray-300'}`}>
+                {robotState.battery.toFixed(0)}%
+              </span>
             </div>
-          </InfoCard>
+          </div>
         </div>
 
-        {/* 任务目标 */}
-        <InfoCard title="生命体征探测">
-          <div className="flex items-center gap-3 min-w-[200px]">
-            <div className={`p-2 rounded-full ${robotState.isPersonDetected ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'}`}>
-              <User size={20} />
+        {/* 中上：环境数据 */}
+        <div className="bg-gray-900/90 border border-gray-700 p-3 rounded-lg shadow-lg flex gap-8 px-6 backdrop-blur-sm">
+          <DataItem 
+            label="TEMP" 
+            value={robotState.temperature.toFixed(1)} 
+            unit="°C" 
+            alert={robotState.temperature > 35}
+          />
+          <DataItem 
+            label="TOXIN" 
+            value={(robotState.gasLevel * 100).toFixed(0)} 
+            unit="%" 
+            alert={robotState.gasLevel > 0.5}
+          />
+          <DataItem 
+            label="VISIBILITY" 
+            value={(robotState.visibility * 100).toFixed(0)} 
+            unit="%" 
+            alert={robotState.visibility < 0.4}
+          />
+        </div>
+
+        {/* 右上：生命体征探测 (高优先级) */}
+        <div className={`
+          border rounded-lg p-4 shadow-lg transition-all duration-300 backdrop-blur-sm
+          ${robotState.isPersonDetected 
+            ? 'bg-red-900/90 border-red-500 text-white scale-110' 
+            : 'bg-gray-900/90 border-gray-700 text-gray-300'
+          }
+        `}>
+          <div className="flex items-center gap-4">
+            <div className={`p-2 rounded-full ${robotState.isPersonDetected ? 'bg-white/20' : 'bg-gray-800'}`}>
+              <User size={24} className={robotState.isPersonDetected ? 'text-white animate-pulse' : 'text-gray-500'} />
             </div>
-            <div>
-              <div className="text-sm font-bold">
-                {robotState.isPersonDetected ? '检测到信号' : '搜索中...'}
-              </div>
-              <div className="text-xs text-gray-500">
-                距离: <span className="font-mono text-base font-bold text-black">{formatDistance(robotState.distanceToNpc)}</span>
+            <div className="flex flex-col">
+              <span className={`text-[10px] font-bold uppercase ${robotState.isPersonDetected ? 'text-white/80' : 'text-gray-500'}`}>
+                LIFE SIGN DETECTOR
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-mono font-bold">
+                  {robotState.isPersonDetected ? formatDistance(robotState.distanceToNpc) : '--'}
+                </span>
+                <span className={`text-xs font-bold ${robotState.isPersonDetected ? 'text-white/80' : 'text-gray-500'}`}>METERS</span>
               </div>
             </div>
           </div>
-        </InfoCard>
+        </div>
       </div>
 
-      {/* 底部栏：控制与物资 */}
-      <div className="flex justify-between items-end pointer-events-auto">
-        {/* 左侧：物资投放 */}
-        <InfoCard title="物资投放">
-          <div className="flex gap-2">
-            <div className="flex flex-col gap-2">
+      {/* 底部栏：操作区 */}
+      <div className="flex justify-between items-end pointer-events-auto pb-4">
+        {/* 左下：物资控制 */}
+        <div className="bg-gray-900/90 border border-gray-700 p-4 rounded-lg shadow-lg space-y-3 backdrop-blur-sm">
+          <div className="text-[10px] font-bold text-gray-500 uppercase border-b border-gray-700 pb-1 mb-2">SUPPLY DROP</div>
+          <div className="flex gap-3">
+            <div className="flex flex-col gap-1">
               <MinimalButton 
-                label={`投放水 (${robotState.waterCount})`}
-                icon={Package}
+                label={`WATER (${robotState.waterCount})`}
+                icon={Droplet}
                 onClick={() => onButtonPress('place_water')}
                 disabled={!isLoaded || robotState.waterCount <= 0}
+                shortcut="1"
               />
+            </div>
+            <div className="flex flex-col gap-1">
               <MinimalButton 
-                label={`投放食物 (${robotState.foodCount})`}
+                label={`FOOD (${robotState.foodCount})`}
                 icon={Package}
                 onClick={() => onButtonPress('place_food')}
                 disabled={!isLoaded || robotState.foodCount <= 0}
+                shortcut="2"
               />
             </div>
           </div>
-        </InfoCard>
+        </div>
 
-        {/* 中间：方向控制 (仅移动端或备用) */}
-        <div className="flex flex-col items-center gap-2 mb-4">
-          <button 
-            className={`p-4 rounded bg-white border border-gray-300 shadow-sm active:bg-gray-100 ${isMoving.forward || keysPressed['W'] ? 'bg-gray-200' : ''}`}
-            onMouseDown={() => onButtonPress('forward')}
-            onMouseUp={() => onButtonRelease('forward')}
-            onTouchStart={() => onButtonPress('forward')}
-            onTouchEnd={() => onButtonRelease('forward')}
-          >
-            <ArrowUp size={24} />
-          </button>
-          <div className="flex gap-2">
-            <button 
-              className={`p-4 rounded bg-white border border-gray-300 shadow-sm active:bg-gray-100 ${isMoving.left || keysPressed['A'] ? 'bg-gray-200' : ''}`}
-              onMouseDown={() => onButtonPress('left')}
-              onMouseUp={() => onButtonRelease('left')}
-              onTouchStart={() => onButtonPress('left')}
-              onTouchEnd={() => onButtonRelease('left')}
-            >
-              <ArrowLeft size={24} />
-            </button>
-            <button 
-              className={`p-4 rounded bg-white border border-gray-300 shadow-sm active:bg-gray-100 ${isMoving.back || keysPressed['S'] ? 'bg-gray-200' : ''}`}
-              onMouseDown={() => onButtonPress('back')}
-              onMouseUp={() => onButtonRelease('back')}
-              onTouchStart={() => onButtonPress('back')}
-              onTouchEnd={() => onButtonRelease('back')}
-            >
-              <ArrowDown size={24} />
-            </button>
-            <button 
-              className={`p-4 rounded bg-white border border-gray-300 shadow-sm active:bg-gray-100 ${isMoving.right || keysPressed['D'] ? 'bg-gray-200' : ''}`}
-              onMouseDown={() => onButtonPress('right')}
-              onMouseUp={() => onButtonRelease('right')}
-              onTouchStart={() => onButtonPress('right')}
-              onTouchEnd={() => onButtonRelease('right')}
-            >
-              <ArrowRight size={24} />
-            </button>
+        {/* 中下：位置与方向 */}
+        <div className="flex flex-col items-center gap-4">
+          {/* 坐标显示 */}
+          <div className="bg-black/80 text-gray-300 px-4 py-1 rounded-full text-xs font-mono font-bold tracking-wider border border-gray-800">
+            POS: {robotState.position.x.toFixed(1)}, {robotState.position.z.toFixed(1)}
+          </div>
+          
+          {/* 方向键 */}
+          <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-700 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2">
+              <button 
+                className={`w-12 h-12 rounded border flex items-center justify-center transition-colors relative
+                  ${isMoving.forward || keysPressed['W'] 
+                    ? 'bg-gray-200 text-black border-white' 
+                    : 'bg-gray-800 text-gray-400 border-gray-600'}`}
+                onMouseDown={() => onButtonPress('forward')}
+                onMouseUp={() => onButtonRelease('forward')}
+              >
+                <ArrowUp size={20} />
+                <span className="absolute top-0.5 right-1 text-[8px] opacity-50">W</span>
+              </button>
+              <div className="flex gap-2">
+                <button 
+                  className={`w-12 h-12 rounded border flex items-center justify-center transition-colors relative
+                    ${isMoving.left || keysPressed['A'] 
+                      ? 'bg-gray-200 text-black border-white' 
+                      : 'bg-gray-800 text-gray-400 border-gray-600'}`}
+                  onMouseDown={() => onButtonPress('left')}
+                  onMouseUp={() => onButtonRelease('left')}
+                >
+                  <ArrowLeft size={20} />
+                  <span className="absolute top-0.5 right-1 text-[8px] opacity-50">A</span>
+                </button>
+                <button 
+                  className={`w-12 h-12 rounded border flex items-center justify-center transition-colors relative
+                    ${isMoving.back || keysPressed['S'] 
+                      ? 'bg-gray-200 text-black border-white' 
+                      : 'bg-gray-800 text-gray-400 border-gray-600'}`}
+                  onMouseDown={() => onButtonPress('back')}
+                  onMouseUp={() => onButtonRelease('back')}
+                >
+                  <ArrowDown size={20} />
+                  <span className="absolute top-0.5 right-1 text-[8px] opacity-50">S</span>
+                </button>
+                <button 
+                  className={`w-12 h-12 rounded border flex items-center justify-center transition-colors relative
+                    ${isMoving.right || keysPressed['D'] 
+                      ? 'bg-gray-200 text-black border-white' 
+                      : 'bg-gray-800 text-gray-400 border-gray-600'}`}
+                  onMouseDown={() => onButtonPress('right')}
+                  onMouseUp={() => onButtonRelease('right')}
+                >
+                  <ArrowRight size={20} />
+                  <span className="absolute top-0.5 right-1 text-[8px] opacity-50">D</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* 右侧：工具控制 */}
-        <InfoCard title="辅助工具">
+        {/* 右下：视觉辅助 */}
+        <div className="bg-gray-900/90 border border-gray-700 p-4 rounded-lg shadow-lg space-y-3 backdrop-blur-sm">
+          <div className="text-[10px] font-bold text-gray-500 uppercase border-b border-gray-700 pb-1 mb-2">VISION SYSTEM</div>
           <div className="flex flex-col gap-2">
             <MinimalButton 
-              label={robotState.isFlashlightOn ? "关闭手电" : "开启手电"}
+              label={robotState.isFlashlightOn ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF"}
               icon={Flashlight}
               active={robotState.isFlashlightOn}
               onClick={() => onButtonPress('toggle_flashlight')}
+              shortcut="M"
             />
             <MinimalButton 
-              label={robotState.isNightvisionOn ? "关闭夜视" : "开启夜视"}
+              label={robotState.isNightvisionOn ? "NIGHT VISION: ON" : "NIGHT VISION: OFF"}
               icon={Eye}
               active={robotState.isNightvisionOn}
               onClick={() => onButtonPress('toggle_nightvision')}
+              color="red"
+              shortcut="N"
             />
           </div>
-        </InfoCard>
+        </div>
       </div>
     </div>
   )
