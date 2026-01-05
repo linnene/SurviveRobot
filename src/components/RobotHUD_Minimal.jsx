@@ -128,7 +128,7 @@ const RobotHUD_Minimal = ({
         `}>
           <div className="flex items-center gap-4">
             <div className={`p-2 rounded-full ${robotState.isPersonDetected ? 'bg-white/20' : 'bg-gray-800'}`}>
-              <User size={24} className={robotState.isPersonDetected ? 'text-white animate-pulse' : 'text-gray-500'} />
+              <User size={24} className={robotState.isPersonDetected ? 'text-white' : 'text-gray-500'} />
             </div>
             <div className="flex flex-col">
               <span className={`text-[10px] font-bold uppercase ${robotState.isPersonDetected ? 'text-white/80' : 'text-gray-500'}`}>

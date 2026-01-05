@@ -49,6 +49,7 @@ function App() {
   })
 
   const keysPressed = useRef({})
+  const lastLifeSignAtRef = useRef(0)
 
   // 初始化JSBridge并监听Unity数据
   useEffect(() => {
@@ -69,6 +70,13 @@ function App() {
       
       // 解析Unity数据
       const parsed = parsePlayerStatus(data)
+
+      const lifeSignNow = (parsed.distanceToNpc > 0 && parsed.distanceToNpc < 100) || parsed.npcIsFollowing
+      if (lifeSignNow) {
+        lastLifeSignAtRef.current = Date.now()
+      }
+
+      const lifeSignLatched = lifeSignNow || (Date.now() - lastLifeSignAtRef.current < 2000)
       
       // 实时更新robotState
       setRobotState((prev) => ({
@@ -84,7 +92,7 @@ function App() {
         isFlashlightOn: parsed.flashlightOn,
         isNightvisionOn: parsed.nightVisionOn,
         // 生命体征检测（距离<100m 或 NPC正在跟随）
-        isPersonDetected: (parsed.distanceToNpc > 0 && parsed.distanceToNpc < 100) || parsed.npcIsFollowing,
+        isPersonDetected: lifeSignLatched,
         // 任务状态
         missionCompleted: parsed.missionCompleted,
         npcFollowUnlocked: parsed.npcFollowUnlocked,
@@ -319,54 +327,79 @@ function App() {
 
   return (
     <div className="w-screen h-screen bg-dark-bg text-white relative overflow-hidden">
-      {/* Tab 切换按钮 */}
-      <div className="absolute top-4 right-4 z-[9999] flex flex-col space-y-2 pointer-events-auto">
-        <div className="text-xs text-gray-400 text-right">
-          当前: {activeTab === 'game' ? '游戏界面' : '通信测试'}
-        </div>
-        <div className="flex space-x-2">
-        <button
-          onClick={() => {
-            console.log('切换到游戏界面')
-            setActiveTab('game')
-          }}
-          className={`px-4 py-2 rounded text-sm font-medium transition-all duration-200 pointer-events-auto cursor-pointer ${
-            activeTab === 'game' 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white shadow-md'
-          }`}
-        >
-          🎮 游戏界面
-        </button>
-        <button
-          onClick={() => {
-            console.log('切换到通信测试界面')
-            setActiveTab('test')
-          }}
-          className={`px-4 py-2 rounded text-sm font-medium transition-all duration-200 pointer-events-auto cursor-pointer ${
-            activeTab === 'test' 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white shadow-md'
-          }`}
-        >
-          🔧 通信测试
-        </button>
-        </div>
-        
-        {/* UI 模式切换 (仅在游戏界面显示) */}
-        {activeTab === 'game' && (
-          <div className="flex space-x-2 mt-2 justify-end">
-            <select 
-              value={uiMode} 
-              onChange={(e) => setUiMode(e.target.value)}
-              className="bg-gray-800 text-white text-xs px-2 py-1 rounded border border-gray-600 pointer-events-auto cursor-pointer"
-            >
-              <option value="default">默认 UI (工业)</option>
-              <option value="minimal">极简 UI (实验A)</option>
-              <option value="dashboard">仪表盘 UI (实验B)</option>
-            </select>
+      {/* 右上角控制抽屉：默认收起，悬停/聚焦展开 */}
+      <div className="absolute top-4 right-4 z-[9999] pointer-events-auto">
+        <div className="group relative">
+          {/* 把手（始终可见） */}
+          <div
+            tabIndex={0}
+            className="w-10 h-10 rounded-lg bg-gray-900/80 border border-gray-700 text-gray-200 shadow-md flex items-center justify-center cursor-pointer select-none backdrop-blur-sm"
+            aria-label="展开控制面板"
+            title="展开控制面板"
+          >
+            <span className="text-sm font-bold">≡</span>
           </div>
-        )}
+
+          {/* 内容（默认隐藏） */}
+          <div
+            className="
+              absolute top-12 right-0 w-[320px]
+              opacity-0 scale-95 translate-y-1 pointer-events-none
+              transition-all duration-200 origin-top-right
+              group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 group-hover:pointer-events-auto
+              group-focus-within:opacity-100 group-focus-within:scale-100 group-focus-within:translate-y-0 group-focus-within:pointer-events-auto
+            "
+          >
+            <div className="flex flex-col space-y-2 bg-gray-950/70 border border-gray-800 rounded-lg p-3 shadow-lg backdrop-blur-sm">
+              <div className="text-xs text-gray-400 text-right">
+                当前: {activeTab === 'game' ? '游戏界面' : '通信测试'}
+              </div>
+              <div className="flex space-x-2 justify-end">
+                <button
+                  onClick={() => {
+                    console.log('切换到游戏界面')
+                    setActiveTab('game')
+                  }}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-all duration-200 pointer-events-auto cursor-pointer ${
+                    activeTab === 'game'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white shadow-md'
+                  }`}
+                >
+                  🎮 游戏界面
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('切换到通信测试界面')
+                    setActiveTab('test')
+                  }}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-all duration-200 pointer-events-auto cursor-pointer ${
+                    activeTab === 'test'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white shadow-md'
+                  }`}
+                >
+                  🔧 通信测试
+                </button>
+              </div>
+
+              {/* UI 模式切换 (仅在游戏界面显示) */}
+              {activeTab === 'game' && (
+                <div className="flex space-x-2 mt-1 justify-end">
+                  <select
+                    value={uiMode}
+                    onChange={(e) => setUiMode(e.target.value)}
+                    className="bg-gray-800 text-white text-xs px-2 py-1 rounded border border-gray-600 pointer-events-auto cursor-pointer"
+                  >
+                    <option value="default">默认 UI (工业)</option>
+                    <option value="minimal">极简 UI (实验A)</option>
+                    <option value="dashboard">仪表盘 UI (实验B)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {activeTab === 'game' ? (

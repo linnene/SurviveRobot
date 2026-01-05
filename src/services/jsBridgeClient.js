@@ -22,7 +22,7 @@ export class JSBridgeClient {
     console.log('[JSBridgeClient] 初始化JavaScript Bridge客户端')
 
     // 监听Unity消息
-    window.addEventListener('UnityMessage', this.handleUnityMessage)
+    window.addEventListener('UnityPlayerStatus', this.handleUnityMessage)
     
     // 监听Unity回调注册完成事件
     window.addEventListener('UnityCallbackRegistered', this.handleCallbackRegistered)
@@ -207,7 +207,7 @@ export class JSBridgeClient {
     console.log('[JSBridgeClient] 清理Bridge客户端资源')
     
     // 移除事件监听器
-    window.removeEventListener('UnityMessage', this.handleUnityMessage)
+    window.removeEventListener('UnityPlayerStatus', this.handleUnityMessage)
     window.removeEventListener('UnityCallbackRegistered', this.handleCallbackRegistered)
     
     // 清理全局回调
