@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Unity, useUnityContext } from 'react-unity-webgl'
 import RobotHUD from './components/RobotHUD'
+import RobotHUD_Minimal from './components/RobotHUD_Minimal'
+import RobotHUD_Dashboard from './components/RobotHUD_Dashboard'
 import JSBridgeTest from './components/JSBridgeTest'
 import { jsBridgeClient } from './services/jsBridgeClient'
 import { parsePlayerStatus } from './services/messageTypes'
@@ -8,6 +10,7 @@ import './App.css'
 
 function App() {
   const [activeTab, setActiveTab] = useState('game') // 'game' 或 'test'
+  const [uiMode, setUiMode] = useState('default') // 'default', 'minimal', 'dashboard'
   
   const { unityProvider, sendMessage, isLoaded } = useUnityContext({
     loaderUrl: '/Build/build.loader.js',
@@ -24,8 +27,8 @@ function App() {
   
   const [robotState, setRobotState] = useState({
     battery: 85,
-    waterCount: 10,
-    foodCount: 10,
+    waterCount: 1,
+    foodCount: 1,
     temperature: 25,
     gasLevel: 0.3,
     visibility: 0.8,
@@ -209,8 +212,10 @@ function App() {
     }
   }, [isLoaded, sendMessage])
 
-  // 模拟数据更新
+  // 模拟数据更新 - 仅在未连接时运行，用于演示UI效果
   useEffect(() => {
+    if (isConnected) return; // 如果已连接，不运行模拟数据
+
     const interval = setInterval(() => {
       setRobotState(prev => {
         // 电池缓慢下降
@@ -229,36 +234,23 @@ function App() {
         let newVisibility = prev.visibility + (Math.random() - 0.5) * 0.01
         newVisibility = Math.max(0.3, Math.min(1, newVisibility))
 
-        // 模拟随机生命体征探测
-        const isPersonDetected = Math.random() > 0.95
-
         return {
           ...prev,
           battery: newBattery,
           temperature: newTemp,
           gasLevel: newGasLevel,
           visibility: newVisibility,
-          isPersonDetected: isPersonDetected || prev.isPersonDetected,
+          // 移除随机生命体征探测，避免干扰测试
+          // isPersonDetected: isPersonDetected || prev.isPersonDetected,
         }
       })
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [])
-
-  const handleDropItem = (type) => {
-    setRobotState(prev => {
-      if (type === 'water' && prev.waterCount > 0) {
-        return { ...prev, waterCount: prev.waterCount - 1 }
-      }
-      if (type === 'food' && prev.foodCount > 0) {
-        return { ...prev, foodCount: prev.foodCount - 1 }
-      }
-      return prev
-    })
-  }
+  }, [isConnected])
 
   const handleButtonPress = (action) => {
+    console.log('[App] Button Press:', action)
     switch (action) {
       case 'forward':
         if (isLoaded) sendMessage('Robot', 'Move', 'forward')
@@ -276,23 +268,31 @@ function App() {
         if (isLoaded) sendMessage('Robot', 'Move', 'right')
         setIsMoving(prev => ({ ...prev, right: true }))
         break
+      
+      // 统一处理物品放置
+      case 'place_water':
       case 'water':
         if (robotState.waterCount > 0 && isConnected) {
           jsBridgeClient.placeItem('water', 1)
           console.log('[App] 按钮: 放置水')
         }
         break
+      case 'place_food':
       case 'food':
         if (robotState.foodCount > 0 && isConnected) {
           jsBridgeClient.placeItem('food', 1)
           console.log('[App] 按钮: 放置食物')
         }
         break
-      // Unity自动处理手电筒和夜视，状态通过JSBridge实时同步
-      case 'flashlight':
-      case 'nightvision':
-        // 这些状态由Unity管理，不需要前端手动切换
+        
+      // 工具控制
+      case 'toggle_flashlight':
+        if (isLoaded) sendMessage('Robot', 'ToggleFlashlight')
         break
+      case 'toggle_nightvision':
+        if (isLoaded) sendMessage('Robot', 'ToggleNightVision')
+        break
+        
       default:
         break
     }
@@ -352,6 +352,21 @@ function App() {
           🔧 通信测试
         </button>
         </div>
+        
+        {/* UI 模式切换 (仅在游戏界面显示) */}
+        {activeTab === 'game' && (
+          <div className="flex space-x-2 mt-2 justify-end">
+            <select 
+              value={uiMode} 
+              onChange={(e) => setUiMode(e.target.value)}
+              className="bg-gray-800 text-white text-xs px-2 py-1 rounded border border-gray-600 pointer-events-auto cursor-pointer"
+            >
+              <option value="default">默认 UI (工业)</option>
+              <option value="minimal">极简 UI (实验A)</option>
+              <option value="dashboard">仪表盘 UI (实验B)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {activeTab === 'game' ? (
@@ -365,15 +380,39 @@ function App() {
           </div>
 
           {/* HUD 覆盖层 */}
-          <RobotHUD
-            robotState={robotState}
-            isMoving={isMoving}
-            onButtonPress={handleButtonPress}
-            onButtonRelease={handleButtonRelease}
-            isLoaded={isLoaded}
-            isSocketConnected={isConnected}
-            keysPressed={keysPressed.current}
-          />
+          {uiMode === 'default' && (
+            <RobotHUD
+              robotState={robotState}
+              isMoving={isMoving}
+              onButtonPress={handleButtonPress}
+              onButtonRelease={handleButtonRelease}
+              isLoaded={isLoaded}
+              isSocketConnected={isConnected}
+              keysPressed={keysPressed.current}
+            />
+          )}
+          {uiMode === 'minimal' && (
+            <RobotHUD_Minimal
+              robotState={robotState}
+              isMoving={isMoving}
+              onButtonPress={handleButtonPress}
+              onButtonRelease={handleButtonRelease}
+              isLoaded={isLoaded}
+              isSocketConnected={isConnected}
+              keysPressed={keysPressed.current}
+            />
+          )}
+          {uiMode === 'dashboard' && (
+            <RobotHUD_Dashboard
+              robotState={robotState}
+              isMoving={isMoving}
+              onButtonPress={handleButtonPress}
+              onButtonRelease={handleButtonRelease}
+              isLoaded={isLoaded}
+              isSocketConnected={isConnected}
+              keysPressed={keysPressed.current}
+            />
+          )}
         </>
       ) : (
         /* JSBridge 测试界面 */
